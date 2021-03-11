@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="PublishConfigData" serverName="root@172.16.43.10:22">
+    <serverData>
+      <paths name="root@172.16.43.10:22">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/node4_gpu_nfs_raid10/wy/a_shandong/OTDR-recognition" local="$PROJECT_DIR$" web="" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="root@172.16.43.10:22 (1)">
+        <serverdata>
+          <mappings>
+            <mapping local="$PROJECT_DIR$" web="/" />
+          </mappings>
+        </serverdata>
+      </paths>
+    </serverData>
+  </component>
+</project>
