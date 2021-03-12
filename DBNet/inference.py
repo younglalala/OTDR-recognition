@@ -127,16 +127,16 @@ def main():
     BOX_THRESH = 0.5
     mean = np.array([103.939, 116.779, 123.68])
 
-    model_path = "db_167_1.9499_1.9947.h5"
+    model_path = "/node4_gpu_nfs_raid10/wy/a_shandong/OTDR-recognition-data/models/db_167_1.9499_1.9947.h5"
 
-    img_dir = 'datasets/2'
+    img_dir = '/node4_gpu_nfs_raid10/wy/a_shandong/OTDR-recognition-data/datasets/2'
     img_names = os.listdir(img_dir)
 
     model = DBNet(cfg, model='inference')
     model.load_weights(model_path, by_name=True, skip_mismatch=True)
     for img_name in tqdm(img_names):
         base_name = img_name.split(".")[0]
-        f = open(os.path.join("datasets/test/output",base_name+".txt"),'w',encoding = "utf-8")
+        f = open(os.path.join("/node4_gpu_nfs_raid10/wy/a_shandong/OTDR-recognition-data/datasets/test/output",base_name+".txt"),'w',encoding = "utf-8")
         img_path = osp.join(img_dir, img_name)
         image = cv2.imread(img_path)
         src_image = image.copy()
