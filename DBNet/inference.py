@@ -4,26 +4,27 @@
 # @Email   : zonas.wang@gmail.com
 # @File    : inference.py
 import math
-
+import sys
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
-import os.path as osp
+
+sys.path.append(os.getcwd()+'/DBNet')
+
+print(os.getcwd())
 import time
 import copy
 import image_crop_tools
 
 import tensorflow as tf
 import cv2
-import glob
 import numpy as np
 import pyclipper
 from shapely.geometry import Polygon
-from tqdm import tqdm
+
 
 from models.model import DBNet
 from config import DBConfig
 cfg = DBConfig()
-
+gpu_id = '-1'
 
 def resize_image(image, image_short_side=736):
     height, width, _ = image.shape
@@ -123,72 +124,91 @@ def polygons_from_bitmap(pred, bitmap, dest_width, dest_height, max_candidates=5
     return boxes, scores
 
 
-def main():
-    BOX_THRESH = 0.5
-    mean = np.array([103.939, 116.779, 123.68])
+class OTDRTextDetection():
+    def __init__(self, model_path=None,gpu_id = None):
+        os.environ['CUDA_VISIBLE_DEVICES'] = str(gpu_id)
+        print("DBnet use gpu ID:{}-+-+-+-+-+-+-+-+-+-+-+-".format(gpu_id))
+        self.BOX_THRESH = 0.5
+        self.mean = np.array([103.939, 116.779, 123.68])
+        self.model = DBNet(cfg, model='inference')
+        self.model.load_weights(model_path, by_name=True, skip_mismatch=True)
 
-    model_path = "/node4_gpu_nfs_raid10/wy/a_shandong/OTDR-recognition-data/models/db_167_1.9499_1.9947.h5"
 
-    img_dir = '/node4_gpu_nfs_raid10/wy/a_shandong/OTDR-recognition-data/datasets/2'
-    img_names = os.listdir(img_dir)
+    def get_model_predict(self, image, _=None):
 
-    model = DBNet(cfg, model='inference')
-    model.load_weights(model_path, by_name=True, skip_mismatch=True)
-    for img_name in tqdm(img_names):
-        base_name = img_name.split(".")[0]
-        f = open(os.path.join("/node4_gpu_nfs_raid10/wy/a_shandong/OTDR-recognition-data/datasets/test/output",base_name+".txt"),'w',encoding = "utf-8")
-        img_path = osp.join(img_dir, img_name)
-        image = cv2.imread(img_path)
         src_image = image.copy()
         h, w = image.shape[:2]
         image = resize_image(image)
         image = image.astype(np.float32)
-        image -= mean
+        image -= self.mean
         image_input = np.expand_dims(image, axis=0)
         image_input_tensor = tf.convert_to_tensor(image_input)
         start_time = time.time()
-        p = model.predict(image_input_tensor)[0]
+        p = self.model.predict(image_input_tensor)[0]
         end_time = time.time()
         print("time: ", end_time - start_time)
 
         bitmap = p > 0.3
-        boxes, scores = polygons_from_bitmap(p, bitmap, w, h, box_thresh=BOX_THRESH)
+        boxes, scores = polygons_from_bitmap(p, bitmap, w, h, box_thresh=self.BOX_THRESH)
+
+        all_crop_boxes = []
+        all_crop_img = []
+
         for box in boxes:
-            rect = cv2.minAreaRect(np.array(box)) # 得到最小外接矩形的（中心(x,y), (宽,高), 旋转角度）
-            bbox = cv2.boxPoints(rect) # 获取最小外接矩形的4个顶点坐标(ps: cv2.boxPoints(rect) for OpenCV 3.x)
+            rect = cv2.minAreaRect(np.array(box))  # 得到最小外接矩形的（中心(x,y), (宽,高), 旋转角度）
+            bbox = cv2.boxPoints(rect)  # 获取最小外接矩形的4个顶点坐标(ps: cv2.boxPoints(rect) for OpenCV 3.x)
             bbox = np.int0(bbox)
-                        #坐标点集合
-            if np.linalg.norm(bbox[0] - bbox[1]) < 5 or np.linalg.norm(bbox[3]-bbox[0]) < 5:
+            # 坐标点集合
+            if np.linalg.norm(bbox[0] - bbox[1]) < 5 or np.linalg.norm(bbox[3] - bbox[0]) < 5:
                 continue
-            new_bbox =np.array([[bbox[0, 0], bbox[0, 1]], [bbox[1, 0], bbox[1, 1]], [bbox[2, 0], bbox[2, 1]], [bbox[3, 0], bbox[3, 1]]])
-#             xmin,ymin,xmax,ymax = int(min(bbox[:,0])),int(min(bbox[:,1])),int(max(bbox[:,0])),int(max(bbox[:,1]))
-            
-            #图像截取
-            box1 = sorted(new_bbox, key=lambda x: (x[1], x[0]))
+            # new_bbox = np.array([[bbox[0, 0], bbox[0, 1]], [bbox[1, 0], bbox[1, 1]], [bbox[2, 0], bbox[2, 1]],
+            #                      [bbox[3, 0], bbox[3, 1]]])
 
-            #将坐标点按照顺时针方向来排序，如果未进行此操作，box的从左往右从上到下排序
-            if box1[0][0]>box1[1][0]:
-                box1[0],box1[1] = box1[1],box1[0]
-            if box1[2][0]<box1[3][0]:
+
+            # 图像截取
+            box1 = sorted(bbox, key=lambda x: (x[1], x[0]))
+
+            # 将坐标点按照顺时针方向来排序，如果未进行此操作，box的从左往右从上到下排序
+            if box1[0][0] > box1[1][0]:
+                box1[0], box1[1] = box1[1], box1[0]
+            if box1[2][0] < box1[3][0]:
                 box1[2], box1[3] = box1[3], box1[2]
-            if box1[0][1]>box1[1][1]:
-                box1[0], box1[1],box1[2], box1[3] = box1[1], box1[2],box1[3], box1[0]
-            tmp_box = copy.deepcopy(np.array(box1))
-            try:
-                partImg_array = image_crop_tools.get_rotate_crop_image(src_image, tmp_box.astype(np.float32))
-                x1,y1,x2,y2,x3,y3,x4,y4 = tmp_box[0][0],tmp_box[0][1],tmp_box[1][0],tmp_box[1][1],tmp_box[2][0],tmp_box[2][1],tmp_box[3][0],tmp_box[3][1]
-                # 画出来
-                f.writelines("{},{},{},{},{},{},{},{}\n".format(x1,y1,x2,y2,x3,y3,x4,y4))
-            except:
-                print(img_name)
-#             cv2.drawContours(src_image, [tmp_box], 0, (0, 255, 0), 2)
+            if box1[0][1] > box1[1][1]:
+                box1[0], box1[1], box1[2], box1[3] = box1[1], box1[2], box1[3], box1[0]
+            tmp_box = copy.deepcopy(np.array(box1)).astype(np.float32)
+            if len(tmp_box[tmp_box < 0]) != 0:
+                tmp_box[tmp_box < 0] = 0
+            # print(tmp_box,'**'*10)
+            boxes = tmp_box.copy()
 
-#             cv2.drawContours(src_image, [np.array(box)], -1, (0, 255, 0), 2)
-#             print(box)
-#         image_fname = osp.split(img_path)[-1]
-#         cv2.imwrite('datasets/test/output/' + image_fname, src_image)
+            all_crop_boxes.append(boxes)
+            partImg_array = image_crop_tools.get_rotate_crop_image(src_image, tmp_box)
+            # x1, y1, x2, y2, x3, y3, x4, y4 = tmp_box[0][0], tmp_box[0][1], tmp_box[1][0], tmp_box[1][1], tmp_box[2][0], \
+            #                                  tmp_box[2][1], tmp_box[3][0], tmp_box[3][1]
 
 
-if __name__ == '__main__':
-    main()
+
+            all_crop_img.append(partImg_array)
+
+        return all_crop_img,all_crop_boxes
+
+
+
+if __name__ == "__main__":
+
+
+    import sys
+    DetectionModelPath = '/node4_gpu_nfs_raid10/wy/a_shandong/OTDR-recognition-data/models/db_167_1.9499_1.9947.h5'
+    detection_model = OTDRTextDetection(model_path=DetectionModelPath,gpu_id = '-1')
+    img_path = '/node4_gpu_nfs_raid10/wy/a_shandong/OTDR-recognition-data/OTDR2'
+    save_path = '/node4_gpu_nfs_raid10/wy/a_shandong/OTDR-recognition-data/crop_out'
+    c = 0
+
+    for file in os.listdir(img_path):
+        img = cv2.imread(os.path.join(img_path, file))[:, :, ::-1]
+        all_crop_img, all_crop_bbox = detection_model.get_model_predict(img)
+        for crop_img in all_crop_img:
+            crop_name = "{}.jpg".format(c)
+            cv2.imwrite(os.path.join(save_path, crop_name),crop_img)
+            c += 1
 

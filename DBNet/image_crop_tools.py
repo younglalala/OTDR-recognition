@@ -7,7 +7,7 @@ def get_rotate_crop_image(img, points):
     :param points: 
     :return: 
     """
-    
+
     left = int(np.min(points[:, 0]))
     right = int(np.max(points[:, 0]))
     top = int(np.min(points[:, 1]))

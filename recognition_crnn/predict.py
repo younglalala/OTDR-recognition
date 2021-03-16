@@ -8,7 +8,7 @@ __version__='chineseocr'
 import os
 os.environ['CUDA_VISIBLE_DEVICES'] = '5'
 from recognition_crnn.keys import Lang
-from config import RecognitionModelPath2
+# from config import RecognitionModelPath2
 from PIL import Image
 from tensorflow.keras.models import load_model
 # from tensorflow.keras.backend import set_session
@@ -16,7 +16,9 @@ import tensorflow as tf
 ocrModel=''
 import numpy as np
 
-ocrModel = { 'chinese': RecognitionModelPath2}
+RecognitionModelPath = '/node4_gpu_nfs_raid10/wy/a_shandong/OTDR-recognition-data/models/ocr.h5'
+
+ocrModel = { 'chinese': RecognitionModelPath}
 
 def load_models():
     modelDict = {}
@@ -28,7 +30,7 @@ def load_models():
             charactersS  = [' ']+list(characters)+[' ',' ']
             
             model = load_model(modelPath)
-            model._make_predict_function()
+            model.make_predict_function()
             charDict ={s:ind for ind,s in enumerate(charactersS)} 
             if ' ' in charDict:
                 charDict[' '] =1
@@ -96,11 +98,11 @@ def decode_prob(t,prob,charactersS):
 
 if __name__=='__main__':
     import time
-    test_path = '/'
+    test_path = '/node4_gpu_nfs_raid10/wy/a_shandong/OTDR-recognition-data/crop_out'
     f = open('result.txt', 'w', encoding='utf-8')
     for file in os.listdir(test_path):
         image = Image.open(os.path.join(test_path, file))
         t = time.time()
         out,pro = predict_prob(image, lan='chinese', useStr=None)
-        f.writelines('{} {} {}\n'.format(file,out,pro))
+        f.writelines('{} {}\n'.format(file,out))
         print('{} {}'.format(file,out))
