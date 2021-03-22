@@ -80,6 +80,7 @@ def predict_prob(image,lan,useStr=None):
           index = prob.argmax(axis=1)
           prob  = [ prob[ind,pb] for ind,pb in enumerate(index)]
           out,prob = decode_prob(index,prob,charactersS)
+
           
     return ''.join(out),prob
 
@@ -98,11 +99,12 @@ def decode_prob(t,prob,charactersS):
 
 if __name__=='__main__':
     import time
-    test_path = '/node4_gpu_nfs_raid10/wy/a_shandong/OTDR-recognition-data/crop_out'
-    f = open('result.txt', 'w', encoding='utf-8')
+    test_path = '/node4_gpu_nfs_raid10/wy/a_shandong/OTDR-recognition-data/crop_out2'
+    res_f = open('crnn_result.txt', 'w', encoding='utf-8')
     for file in os.listdir(test_path):
         image = Image.open(os.path.join(test_path, file))
         t = time.time()
         out,pro = predict_prob(image, lan='chinese', useStr=None)
-        f.writelines('{} {}\n'.format(file,out))
-        print('{} {}'.format(file,out))
+        res_f.writelines('{}   {}\n'.format(file,out))
+        print('{}   {}'.format(file,out))
+    res_f.close()
